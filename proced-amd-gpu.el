@@ -14,6 +14,7 @@
 ;;; Code:
 
 (require 'proced)
+(require 'json)
 
 ;; Example output:
 
@@ -504,10 +505,52 @@
 ;;   }
 ;; }
 
+(defconst proced-amd-gpu-amdgpu-top-process-name "amdgpu_top")
+
+(defcustom proced-amd-gpu-process-alist
+  '((compute "Compute" "%s" left proced-string-lessp nil (node pid) (nil t nil))
+    (dma "DMA" "%s" left proced-string-lessp nil (node pid) (nil t nil))
+    (decode "Decode" "%s" left proced-string-lessp nil (node pid) (nil t nil))
+    (encode "Encode" "%s" left proced-string-lessp nil (node pid) (nil t nil))
+    (gfx "GFX" "%s" left proced-string-lessp nil (node pid) (nil t nil))
+    (gt "GTT" "%s" left proced-string-lessp nil (node pid) (nil t nil))
+    (vram "VRAM" "%s" left proced-string-lessp nil (node pid) (nil t nil)))
+  "Proced AMD GPU process alist.")
+
 (defvar proced-amd-gpu--attribute-state nil
   "Global value of the GPU attribute state.
 
 It's a hash table mapping (pid . attribute) to the attribute value.")
+
+(defun proc-amd-gpu--extract-pid (proc-identifier)
+  "Extract pid from PROC-IDENTIFIER."
+  (substring (seq-drop-while (lambda (c) (not (= c ?\())) proc-identifier) 1 -1))
+
+(defun proced-amd-gpu--process-filter (proc string)
+  "Load STRING into `proced-amd-gpu--attribute-state'.
+
+PROC should be an \"amdgpu_top\" process."
+  (when-let* ((process-live-p proc)
+              (decoded (ignore-errors (json-parse-string (string-trim string))))
+              (proc-infos (gethash "fdinfo" decoded))
+              (new-hash (make-hash-table)))
+    (cl-loop for proc-identifier being the hash-keys of proc-infos
+             using (hash-values proc-table)
+             for pid = (proc-amd-gpu--extract-pid proc-identifier)
+             do
+             (print proc-identifier)
+             (cl-loop
+              for attr being the hash-keys of (gethash "usage" proc-table)
+              using (hash-values attr-value)
+              do
+              (puthash (cons pid (intern (downcase attr))) attr-value new-hash)))
+    (setq proced-amd-gpu--attribute-state new-hash)))
+
+(defun proced-amd-gpu--initialise ()
+  (unless (get-process proced-amd-gpu-amdgpu-top-process-name)
+    (make-process :name proced-amd-gpu-amdgpu-top-process-name
+                  :command (list "amdgpu_top" "-J")
+                  :filter #'proced-amd-gpu--process-filter)))
 
 (defun proced-amd-gpu--vram (process-attrs)
   "Return VRAM string for the process with PROCESS-ATTRS."
@@ -519,13 +562,6 @@ It's a hash table mapping (pid . attribute) to the attribute value.")
 (add-to-list 'proced-custom-attributes 'proced-amd-gpu--vram)
 
 (add-to-list 'proced-grammar-alist
-             '(compute "Compute" "%s" left proced-string-lessp nil (node pid) (nil t nil))
-             '(dma "DMA" "%s" left proced-string-lessp nil (node pid) (nil t nil))
-             '(decode "Decode" "%s" left proced-string-lessp nil (node pid) (nil t nil))
-             '(encode "Encode" "%s" left proced-string-lessp nil (node pid) (nil t nil))
-             '(gfx "GFX" "%s" left proced-string-lessp nil (node pid) (nil t nil))
-             '(gt "GTT" "%s" left proced-string-lessp nil (node pid) (nil t nil))
-             '(vram "VRAM" "%s" left proced-string-lessp nil (node pid) (nil t nil))
              )
 
 (provide 'proced-amd-gpu)
