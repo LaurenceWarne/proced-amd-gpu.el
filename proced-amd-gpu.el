@@ -18,6 +18,10 @@
 
 ;; Example output:
 
+(defgroup proced-amd-gpu nil
+  "Proced integration for AMD GPU statistics."
+  :group 'tools)
+
 ;; {
 ;;   "DeviceName": "AMD Radeon Graphics",
 ;;   "GRBM": {
@@ -515,7 +519,8 @@
     (gfx "GFX" "%s" left proced-string-lessp nil (node pid) (nil t nil))
     (gt "GTT" "%s" left proced-string-lessp nil (node pid) (nil t nil))
     (vram "VRAM" "%s" left proced-string-lessp nil (node pid) (nil t nil)))
-  "Proced AMD GPU process alist.")
+  "Proced AMD GPU process alist."
+  :group 'proced-amd-gpu)
 
 (defvar proced-amd-gpu--attribute-state nil
   "Global value of the GPU attribute state.
@@ -533,17 +538,18 @@ PROC should be an \"amdgpu_top\" process."
   (when-let* ((process-live-p proc)
               (decoded (ignore-errors (json-parse-string (string-trim string))))
               (proc-infos (gethash "fdinfo" decoded))
-              (new-hash (make-hash-table)))
+              (new-hash (make-hash-table :test #'equal)))
     (cl-loop for proc-identifier being the hash-keys of proc-infos
              using (hash-values proc-table)
              for pid = (proc-amd-gpu--extract-pid proc-identifier)
              do
-             (print proc-identifier)
              (cl-loop
               for attr being the hash-keys of (gethash "usage" proc-table)
               using (hash-values attr-value)
               do
-              (puthash (cons pid (intern (downcase attr))) attr-value new-hash)))
+              (puthash (cons (string-to-number pid) (intern (downcase attr)))
+                       (number-to-string (gethash "value" attr-value))
+                       new-hash)))
     (setq proced-amd-gpu--attribute-state new-hash)))
 
 (defun proced-amd-gpu--initialise ()
@@ -552,17 +558,19 @@ PROC should be an \"amdgpu_top\" process."
                   :command (list "amdgpu_top" "-J")
                   :filter #'proced-amd-gpu--process-filter)))
 
-(defun proced-amd-gpu--vram (process-attrs)
+(defun proced-amd-gpu-vram (process-attrs)
   "Return VRAM string for the process with PROCESS-ATTRS."
-  (if-let* ((pid (assq 'pid process-attrs))
-            (vram (gethash (cons pid 'vram) proced-amd-gpu--attribute-state)))
-      vram
-    ""))
+  (cons 'vram
+        (if-let* ((pid (alist-get 'pid process-attrs))
+                  (vram (gethash (cons pid 'vram) proced-amd-gpu--attribute-state)))
+            vram
+          "")))
 
-(add-to-list 'proced-custom-attributes 'proced-amd-gpu--vram)
+(add-to-list 'proced-custom-attributes 'proced-amd-gpu-vram)
 
-(add-to-list 'proced-grammar-alist
-             )
+(mapc (lambda (grammar)
+        (add-to-list 'proced-grammar-alist grammar))
+      proced-amd-gpu-process-alist)
 
 (provide 'proced-amd-gpu)
 
