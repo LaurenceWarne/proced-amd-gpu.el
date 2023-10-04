@@ -21,16 +21,26 @@
   "Proced integration for AMD GPU statistics."
   :group 'tools)
 
-(defconst proced-amd-gpu-amdgpu-top-process-name "amdgpu_top")
+(defcustom proced-amd-gpu-executable "amdgpu_top"
+  "Executable used to obtain GPU statistics."
+  :group 'proced-amd-gpu
+  :type 'string)
 
-(defcustom proced-amd-gpu-process-alist
+(defcustom proced-amd-gpu-unit-translations
+  ;; Convert MiB to kilobytes
+  (list (cons "MiB" (lambda (n) (* 1024 n))))
+  "Alist used to map amdgpu_top attribute values, given the unit."
+  :group 'proced-amd-gpu
+  :type 'list)
+
+(defcustom proced-amd-gpu-grammar-alist
   '((compute "Compute" "%s" left proced-string-lessp nil (node pid) (nil t nil))
     (dma "DMA" "%s" left proced-string-lessp nil (node pid) (nil t nil))
     (decode "Decode" "%s" left proced-string-lessp nil (node pid) (nil t nil))
     (encode "Encode" "%s" left proced-string-lessp nil (node pid) (nil t nil))
     (gfx "GFX" "%s" left proced-string-lessp nil (node pid) (nil t nil))
     (gt "GTT" "%s" left proced-string-lessp nil (node pid) (nil t nil))
-    (vram "VRAM" "%s" left proced-string-lessp nil (node pid) (nil t nil)))
+    (vram "VRAM" proced-amd-gpu-format-vram left proced-< nil (node pid) (nil t nil)))
   "Proced AMD GPU process alist."
   :group 'proced-amd-gpu
   :type 'list)
@@ -69,24 +79,39 @@ PROC should be an \"amdgpu_top\" process."
 
 (defun proced-amd-gpu--initialise ()
   "Start the amdgpu_top process."
-  (unless (get-process proced-amd-gpu-amdgpu-top-process-name)
-    (make-process :name proced-amd-gpu-amdgpu-top-process-name
+  (unless (get-process proced-amd-gpu-executable)
+    (make-process :name proced-amd-gpu-executable
                   :command (list "amdgpu_top" "-J")
                   :filter #'proced-amd-gpu--process-filter)))
 
+(defun proced-amd-gpu-attribute (attribute-sym process-attrs default)
+  "Return ATTRIBUTE-SYM for the process with PROCESS-ATTRS.
+
+Return DEFAULT if ATTRIBUTE-SYM is not output by \"amdgpu_top\" against
+the process."
+  (cons attribute-sym
+        (if-let* ((pid (alist-get 'pid process-attrs))
+                  (attribute (gethash (cons pid attribute-sym)
+                                      proced-amd-gpu--attribute-state)))
+            attribute
+          default)))
+
 (defun proced-amd-gpu-vram (process-attrs)
   "Return VRAM string for the process with PROCESS-ATTRS."
-  (cons 'vram
-        (if-let* ((pid (alist-get 'pid process-attrs))
-                  (vram (gethash (cons pid 'vram) proced-amd-gpu--attribute-state)))
-            vram
-          "")))
+  (proced-amd-gpu-attribute 'vram process-attrs ""))
+
+;; Format functions
+
+(defun proced-amd-gpu-format-vram (vram)
+  "Format the integer VRAM, which should be in kilobytes."
+  (proced-format-rss vram))
+
 
 (add-to-list 'proced-custom-attributes 'proced-amd-gpu-vram)
 
 (mapc (lambda (grammar)
         (add-to-list 'proced-grammar-alist grammar))
-      proced-amd-gpu-process-alist)
+      proced-amd-gpu-grammar-alist)
 
 (proced-amd-gpu--initialise)
 
