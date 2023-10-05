@@ -34,13 +34,12 @@
   :type 'list)
 
 (defcustom proced-amd-gpu-grammar-alist
-  '((compute "Compute" "%s" left proced-string-lessp nil (node pid) (nil t nil))
-    (dma "DMA" "%s" left proced-string-lessp nil (node pid) (nil t nil))
-    (decode "Decode" "%s" left proced-string-lessp nil (node pid) (nil t nil))
-    (encode "Encode" "%s" left proced-string-lessp nil (node pid) (nil t nil))
-    (gfx "GFX" "%s" left proced-string-lessp nil (node pid) (nil t nil))
-    (gt "GTT" "%s" left proced-string-lessp nil (node pid) (nil t nil))
-    (vram "VRAM" proced-amd-gpu-format-vram left proced-< nil (node pid) (nil t nil)))
+  '((vram "VRAM" proced-amd-gpu-format-vram right proced-< nil (vram pid) (nil t t))
+    (gtt "GTT" proced-amd-gpu-format-gtt right proced-< nil (gtt pid) (nil t t))
+    (gfx "GFX" proced-amd-gpu-format-gfx right proced-< nil (gfx pid) (nil t t))
+    (encode "Encode" proced-amd-gpu-format-encode right proced-< nil (encode pid) (nil t t))
+    (decode "Decode" proced-amd-gpu-format-decode right proced-< nil (decode pid) (nil t t))
+    (dma "DMA" proced-amd-gpu-format-dma right proced-< nil (dma pid) (nil t t)))
   "Proced AMD GPU process alist."
   :group 'proced-amd-gpu
   :type 'list)
@@ -70,11 +69,16 @@ PROC should be an \"amdgpu_top\" process."
               for attr being the hash-keys of (gethash "usage" proc-table)
               using (hash-values attr-value)
               do
-              (puthash (cons (string-to-number pid) (intern (downcase attr)))
-                       (format "%d %s"
-                               (gethash "value" attr-value)
-                               (gethash "unit" attr-value))
-                       new-hash)))
+              (let* ((attr-symbol (intern (downcase attr)))
+                     (translation-fn (alist-get
+                                      (gethash "unit" attr-value)
+                                      proced-amd-gpu-unit-translations
+                                      #'identity))
+                     (translated-value (funcall translation-fn
+                                                (gethash "value" attr-value))))
+                (puthash (cons (string-to-number pid) attr-symbol)
+                         translated-value
+                         new-hash))))
     (setq proced-amd-gpu--attribute-state new-hash)))
 
 (defun proced-amd-gpu--initialise ()
@@ -97,8 +101,28 @@ the process."
           default)))
 
 (defun proced-amd-gpu-vram (process-attrs)
-  "Return VRAM string for the process with PROCESS-ATTRS."
-  (proced-amd-gpu-attribute 'vram process-attrs ""))
+  "Return VRAM integral value for the process with PROCESS-ATTRS."
+  (proced-amd-gpu-attribute 'vram process-attrs 0))
+
+(defun proced-amd-gpu-gtt (process-attrs)
+  "Return GTT integral value for the process with PROCESS-ATTRS."
+  (proced-amd-gpu-attribute 'gtt process-attrs 0))
+
+(defun proced-amd-gpu-gfx (process-attrs)
+  "Return GFX integral value for the process with PROCESS-ATTRS."
+  (proced-amd-gpu-attribute 'gfx process-attrs 0))
+
+(defun proced-amd-gpu-encode (process-attrs)
+  "Return ENCODE integral value for the process with PROCESS-ATTRS."
+  (proced-amd-gpu-attribute 'encode process-attrs 0))
+
+(defun proced-amd-gpu-decode (process-attrs)
+  "Return DECODE integral value for the process with PROCESS-ATTRS."
+  (proced-amd-gpu-attribute 'decode process-attrs 0))
+
+(defun proced-amd-gpu-dma (process-attrs)
+  "Return DMA integral value for the process with PROCESS-ATTRS."
+  (proced-amd-gpu-attribute 'dma process-attrs 0))
 
 ;; Format functions
 
@@ -106,8 +130,32 @@ the process."
   "Format the integer VRAM, which should be in kilobytes."
   (proced-format-rss vram))
 
+(defun proced-amd-gpu-format-gtt (gtt)
+  "Format the integer GTT, which should be in kilobytes."
+  (proced-format-rss gtt))
+
+(defun proced-amd-gpu-format-gfx (gfx)
+  "Format the integer GFX, which should be a percentage."
+  (proced-format-cpu gfx))
+
+(defun proced-amd-gpu-format-encode (encode)
+  "Format the integer ENCODE, which should be a percentage."
+  (proced-format-cpu encode))
+
+(defun proced-amd-gpu-format-decode (decode)
+  "Format the integer DECODE, which should be a percentage."
+  (proced-format-cpu decode))
+
+(defun proced-amd-gpu-format-dma (dma)
+  "Format the integer DMA, which should be a percentage."
+  (proced-format-cpu dma))
 
 (add-to-list 'proced-custom-attributes 'proced-amd-gpu-vram)
+(add-to-list 'proced-custom-attributes 'proced-amd-gpu-gtt)
+(add-to-list 'proced-custom-attributes 'proced-amd-gpu-gfx)
+(add-to-list 'proced-custom-attributes 'proced-amd-gpu-encode)
+(add-to-list 'proced-custom-attributes 'proced-amd-gpu-decode)
+(add-to-list 'proced-custom-attributes 'proced-amd-gpu-dma)
 
 (mapc (lambda (grammar)
         (add-to-list 'proced-grammar-alist grammar))
