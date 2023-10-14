@@ -34,7 +34,7 @@
   :type 'list)
 
 (defcustom proced-amd-gpu-grammar-alist
-  '((gpu-usage "GPU %" proced-amd-gpu-format-usage right proced-< nil (usage pid) (nil t t))
+  '((pgpu "%GPU" proced-amd-gpu-format-pgpu right proced-< nil (usage pid) (nil t t))
     (vram "VRAM" proced-amd-gpu-format-vram right proced-< nil (vram pid) (nil t t))
     (gtt "GTT" proced-amd-gpu-format-gtt right proced-< nil (gtt pid) (nil t t))
     (gfx "GFX" proced-amd-gpu-format-gfx right proced-< nil (gfx pid) (nil t t))
@@ -51,16 +51,17 @@
 It's a hash table mapping (pid . attribute) to the attribute value.")
 
 (defun proc-amd-gpu--extract-pid (proc-identifier)
-  "Extract pid from PROC-IDENTIFIER."
-  (substring (seq-drop-while (lambda (c) (not (= c ?\())) proc-identifier) 1 -1))
+  "Extract pid (as a string) from PROC-IDENTIFIER."
+  (if (string-match-p (rx string-start (+ digit) string-end) proc-identifier)
+      proc-identifier
+    (substring (seq-drop-while (lambda (c) (not (= c ?\())) proc-identifier) 1 -1)))
 
-(defun proced-amd-gpu--process-filter (proc string)
-  "Load STRING into `proced-amd-gpu--attribute-state'.
-
-PROC should be an \"amdgpu_top\" process."
-  (when-let* ((process-live-p proc)
-              (decoded (ignore-errors (json-parse-string (string-trim string))))
-              (proc-infos (gethash "fdinfo" decoded))
+(defun proced-amd-gpu--json-to-hash-table (string)
+  "Decode STRING into an a hashtable mapping pids and attribute symbols to values."
+  (when-let* ((decoded (ignore-errors (json-parse-string (string-trim string))))
+              (proc-infos (if-let ((v021-result (ignore-errors (elt (gethash "devices" decoded) 0))))
+                              (gethash "fdinfo" v021-result)
+                            (gethash "fdinfo" decoded)))
               (new-hash (make-hash-table :test #'equal)))
     (cl-loop for proc-identifier being the hash-keys of proc-infos
              using (hash-values proc-table)
@@ -80,6 +81,14 @@ PROC should be an \"amdgpu_top\" process."
                 (puthash (cons (string-to-number pid) attr-symbol)
                          translated-value
                          new-hash))))
+    new-hash))
+
+(defun proced-amd-gpu--process-filter (proc string)
+  "Load STRING into `proced-amd-gpu--attribute-state'.
+
+PROC should be an \"amdgpu_top\" process."
+  (when-let* ((process-live-p proc)
+              (new-hash (proced-amd-gpu--json-to-hash-table string)))
     (setq proced-amd-gpu--attribute-state new-hash)))
 
 (defun proced-amd-gpu--initialise ()
@@ -89,21 +98,23 @@ PROC should be an \"amdgpu_top\" process."
                   :command (list "amdgpu_top" "-J")
                   :filter #'proced-amd-gpu--process-filter)))
 
-(defun proced-amd-gpu-attribute (attribute-sym process-attrs default)
+(defun proced-amd-gpu-attribute (attribute-sym process-attrs default &optional attribute-key)
   "Return ATTRIBUTE-SYM for the process with PROCESS-ATTRS.
 
 Return DEFAULT if ATTRIBUTE-SYM is not output by \"amdgpu_top\" against
-the process."
+the process.
+
+If ATTRIBUTE-KEY is specified, use it to obtain the attribute from the amdgpu_top data."
   (cons attribute-sym
         (if-let* ((pid (alist-get 'pid process-attrs))
-                  (attribute (gethash (cons pid attribute-sym)
+                  (attribute (gethash (cons pid (or attribute-key attribute-sym))
                                       proced-amd-gpu--attribute-state)))
             attribute
           default)))
 
-(defun proced-amd-gpu-usage (process-attrs)
+(defun proced-amd-gpu-pgpu (process-attrs)
   "Return USAGE integral value for the process with PROCESS-ATTRS."
-  (proced-amd-gpu-attribute 'usage process-attrs 0))
+  (proced-amd-gpu-attribute 'pgpu process-attrs 0 'cpu))
 
 (defun proced-amd-gpu-vram (process-attrs)
   "Return VRAM integral value for the process with PROCESS-ATTRS."
@@ -131,7 +142,7 @@ the process."
 
 ;; Format functions
 
-(defun proced-amd-gpu-format-usage (usage)
+(defun proced-amd-gpu-format-pgpu (usage)
   "Format the integer USAGE, which should be a percentage."
   (proced-format-cpu usage))
 
@@ -159,7 +170,7 @@ the process."
   "Format the integer DMA, which should be a percentage."
   (proced-format-cpu dma))
 
-(add-to-list 'proced-custom-attributes 'proced-amd-gpu-usage)
+(add-to-list 'proced-custom-attributes 'proced-amd-gpu-pgpu)
 (add-to-list 'proced-custom-attributes 'proced-amd-gpu-vram)
 (add-to-list 'proced-custom-attributes 'proced-amd-gpu-gtt)
 (add-to-list 'proced-custom-attributes 'proced-amd-gpu-gfx)
