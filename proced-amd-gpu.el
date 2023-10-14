@@ -34,7 +34,8 @@
   :type 'list)
 
 (defcustom proced-amd-gpu-grammar-alist
-  '((vram "VRAM" proced-amd-gpu-format-vram right proced-< nil (vram pid) (nil t t))
+  '((gpu-usage "GPU %" proced-amd-gpu-format-usage right proced-< nil (usage pid) (nil t t))
+    (vram "VRAM" proced-amd-gpu-format-vram right proced-< nil (vram pid) (nil t t))
     (gtt "GTT" proced-amd-gpu-format-gtt right proced-< nil (gtt pid) (nil t t))
     (gfx "GFX" proced-amd-gpu-format-gfx right proced-< nil (gfx pid) (nil t t))
     (encode "Encode" proced-amd-gpu-format-encode right proced-< nil (encode pid) (nil t t))
@@ -100,6 +101,10 @@ the process."
             attribute
           default)))
 
+(defun proced-amd-gpu-usage (process-attrs)
+  "Return USAGE integral value for the process with PROCESS-ATTRS."
+  (proced-amd-gpu-attribute 'usage process-attrs 0))
+
 (defun proced-amd-gpu-vram (process-attrs)
   "Return VRAM integral value for the process with PROCESS-ATTRS."
   (proced-amd-gpu-attribute 'vram process-attrs 0))
@@ -126,6 +131,10 @@ the process."
 
 ;; Format functions
 
+(defun proced-amd-gpu-format-usage (usage)
+  "Format the integer USAGE, which should be a percentage."
+  (proced-format-cpu usage))
+
 (defun proced-amd-gpu-format-vram (vram)
   "Format the integer VRAM, which should be in kilobytes."
   (proced-format-rss vram))
@@ -150,6 +159,7 @@ the process."
   "Format the integer DMA, which should be a percentage."
   (proced-format-cpu dma))
 
+(add-to-list 'proced-custom-attributes 'proced-amd-gpu-usage)
 (add-to-list 'proced-custom-attributes 'proced-amd-gpu-vram)
 (add-to-list 'proced-custom-attributes 'proced-amd-gpu-gtt)
 (add-to-list 'proced-custom-attributes 'proced-amd-gpu-gfx)
