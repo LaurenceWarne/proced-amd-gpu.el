@@ -45,6 +45,11 @@
   :group 'proced-amd-gpu
   :type 'list)
 
+(defcustom proced-amd-gpu-command (list "amdgpu_top" "-J")
+  "Shell command used to run (or stub) amdgpu_top."
+  :group 'proced-amd-gpu
+  :type 'list)
+
 (defvar proced-amd-gpu--attribute-state (make-hash-table)
   "Global value of the GPU attribute state.
 
@@ -95,7 +100,7 @@ PROC should be an \"amdgpu_top\" process."
   "Start the amdgpu_top process."
   (unless (get-process proced-amd-gpu-executable)
     (make-process :name proced-amd-gpu-executable
-                  :command (list "amdgpu_top" "-J")
+                  :command proced-amd-gpu-command
                   :filter #'proced-amd-gpu--process-filter)))
 
 (defun proced-amd-gpu-attribute (attribute-sym process-attrs default &optional attribute-key)

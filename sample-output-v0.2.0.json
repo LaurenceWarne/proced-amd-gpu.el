@@ -109,11 +109,11 @@
     }
   },
   "fdinfo": {
-    "amdgpu_top (220645)": {
+    "amdgpu_top (1337)": {
       "usage": {
         "Compute": {
           "unit": "%",
-          "value": 0
+          "value": 10
         },
         "DMA": {
           "unit": "%",
