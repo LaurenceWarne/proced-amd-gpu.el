@@ -97,7 +97,7 @@ PROC should be an \"amdgpu_top\" process."
     (setq proced-amd-gpu--attribute-state new-hash)))
 
 (defun proced-amd-gpu--initialise ()
-  "Start the amdgpu_top process."
+  "Start the amdgpu_top process if one has not already started."
   (unless (get-process proced-amd-gpu-executable)
     (make-process :name proced-amd-gpu-executable
                   :command proced-amd-gpu-command
@@ -175,19 +175,22 @@ If ATTRIBUTE-KEY is specified, use it to obtain the attribute from the amdgpu_to
   "Format the integer DMA, which should be a percentage."
   (proced-format-cpu dma))
 
-(add-to-list 'proced-custom-attributes 'proced-amd-gpu-pgpu)
-(add-to-list 'proced-custom-attributes 'proced-amd-gpu-vram)
-(add-to-list 'proced-custom-attributes 'proced-amd-gpu-gtt)
-(add-to-list 'proced-custom-attributes 'proced-amd-gpu-gfx)
-(add-to-list 'proced-custom-attributes 'proced-amd-gpu-encode)
-(add-to-list 'proced-custom-attributes 'proced-amd-gpu-decode)
-(add-to-list 'proced-custom-attributes 'proced-amd-gpu-dma)
+(with-eval-after-load 'proced
+  (add-to-list 'proced-custom-attributes 'proced-amd-gpu-pgpu)
+  (add-to-list 'proced-custom-attributes 'proced-amd-gpu-vram)
+  (add-to-list 'proced-custom-attributes 'proced-amd-gpu-gtt)
+  (add-to-list 'proced-custom-attributes 'proced-amd-gpu-gfx)
+  (add-to-list 'proced-custom-attributes 'proced-amd-gpu-encode)
+  (add-to-list 'proced-custom-attributes 'proced-amd-gpu-decode)
+  (add-to-list 'proced-custom-attributes 'proced-amd-gpu-dma)
+  (mapc (lambda (grammar)
+          (add-to-list 'proced-grammar-alist grammar))
+        proced-amd-gpu-grammar-alist))
 
-(mapc (lambda (grammar)
-        (add-to-list 'proced-grammar-alist grammar))
-      proced-amd-gpu-grammar-alist)
-
-(proced-amd-gpu--initialise)
+(add-hook
+ 'proced-mode-hook
+ (lambda ()
+   (proced-amd-gpu--initialise)))
 
 (provide 'proced-amd-gpu)
 
