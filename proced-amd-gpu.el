@@ -109,7 +109,8 @@ PROC should be an \"amdgpu_top\" process."
 Return DEFAULT if ATTRIBUTE-SYM is not output by \"amdgpu_top\" against
 the process.
 
-If ATTRIBUTE-KEY is specified, use it to obtain the attribute from the amdgpu_top data."
+If ATTRIBUTE-KEY is specified, use it to obtain the attribute from the
+amdgpu_top data."
   (cons attribute-sym
         (if-let* ((pid (alist-get 'pid process-attrs))
                   (attribute (gethash (cons pid (or attribute-key attribute-sym))
