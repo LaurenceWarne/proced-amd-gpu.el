@@ -186,12 +186,11 @@ amdgpu_top data."
   (add-to-list 'proced-custom-attributes 'proced-amd-gpu-dma)
   (mapc (lambda (grammar)
           (add-to-list 'proced-grammar-alist grammar))
-        proced-amd-gpu-grammar-alist))
-
-(add-hook
- 'proced-mode-hook
- (lambda ()
-   (proced-amd-gpu--initialise)))
+        proced-amd-gpu-grammar-alist)
+  (add-hook
+   'proced-mode-hook
+   (lambda ()
+     (proced-amd-gpu--initialise))))
 
 (provide 'proced-amd-gpu)
 
