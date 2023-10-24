@@ -34,13 +34,13 @@
   :type 'list)
 
 (defcustom proced-amd-gpu-grammar-alist
-  '((pgpu "%GPU" proced-amd-gpu-format-pgpu right proced-< nil (usage pid) (nil t t))
-    (vram "VRAM" proced-amd-gpu-format-vram right proced-< nil (vram pid) (nil t t))
-    (gtt "GTT" proced-amd-gpu-format-gtt right proced-< nil (gtt pid) (nil t t))
-    (gfx "GFX" proced-amd-gpu-format-gfx right proced-< nil (gfx pid) (nil t t))
-    (encode "Encode" proced-amd-gpu-format-encode right proced-< nil (encode pid) (nil t t))
-    (decode "Decode" proced-amd-gpu-format-decode right proced-< nil (decode pid) (nil t t))
-    (dma "DMA" proced-amd-gpu-format-dma right proced-< nil (dma pid) (nil t t)))
+  '((pgpu "%GPU" proced-amd-gpu-format-percentage right proced-< nil (usage pid) (nil t t))
+    (vram "VRAM" proced-amd-gpu-format-kb right proced-< nil (vram pid) (nil t t))
+    (gtt "GTT" proced-amd-gpu-format-kb right proced-< nil (gtt pid) (nil t t))
+    (gfx "GFX" proced-amd-gpu-format-percentage right proced-< nil (gfx pid) (nil t t))
+    (encode "Encode" proced-amd-gpu-format-percentage right proced-< nil (encode pid) (nil t t))
+    (decode "Decode" proced-amd-gpu-format-percentage right proced-< nil (decode pid) (nil t t))
+    (dma "DMA" proced-amd-gpu-format-percentage right proced-< nil (dma pid) (nil t t)))
   "Proced AMD GPU process alist."
   :group 'proced-amd-gpu
   :type 'list)
@@ -49,6 +49,29 @@
   "Shell command used to run (or stub) amdgpu_top."
   :group 'proced-amd-gpu
   :type 'list)
+
+(defface proced-amd-gpu-pc
+  '((((class color) (min-colors 88)) (:foreground "#6d5cc3" :bold t))
+    (t (:bold t)))
+  "Face used in Proced buffers for GPU utilization.")
+
+(defface proced-amd-gpu-memory-high-usage
+  '((((class color) (min-colors 88) (background dark)) (:foreground "orange"))
+    (((class color) (min-colors 88) (background light)) (:foreground "OrangeRed"))
+    (((class color)) (:foreground "red"))
+    (t (:underline t)))
+  "Face used in Proced buffers for high GPU memory usage.")
+
+(defface proced-amd-gpu-memory-medium-usage
+  '((((class color) (min-colors 88) (background dark)) (:foreground "yellow3"))
+    (((class color) (min-colors 88) (background light)) (:foreground "orange"))
+    (((class color)) (:foreground "yellow")))
+  "Face used in Proced buffers for medium GPU memory usage.")
+
+(defface proced-amd-gpu-memory-low-usage
+  '((((class color) (min-colors 88) (background dark)) (:foreground "#8bcd50"))
+    (((class color)) (:foreground "green")))
+  "Face used in Proced buffers for low GPU memory usage.")
 
 (defvar proced-amd-gpu--attribute-state (make-hash-table)
   "Global value of the GPU attribute state.
@@ -148,33 +171,20 @@ amdgpu_top data."
 
 ;; Format functions
 
-(defun proced-amd-gpu-format-pgpu (usage)
-  "Format the integer USAGE, which should be a percentage."
-  (proced-format-cpu usage))
+(defun proced-amd-gpu-format-percentage (pc)
+  "Format PC."
+  (let ((formatted (format "%.1f" pc)))
+    (if (bound-and-true-p proced-enable-color-flag)
+        (propertize formatted 'font-lock-face 'proced-amd-gpu-pc)
+      formatted)))
 
-(defun proced-amd-gpu-format-vram (vram)
-  "Format the integer VRAM, which should be in kilobytes."
-  (proced-format-rss vram))
-
-(defun proced-amd-gpu-format-gtt (gtt)
-  "Format the integer GTT, which should be in kilobytes."
-  (proced-format-rss gtt))
-
-(defun proced-amd-gpu-format-gfx (gfx)
-  "Format the integer GFX, which should be a percentage."
-  (proced-format-cpu gfx))
-
-(defun proced-amd-gpu-format-encode (encode)
-  "Format the integer ENCODE, which should be a percentage."
-  (proced-format-cpu encode))
-
-(defun proced-amd-gpu-format-decode (decode)
-  "Format the integer DECODE, which should be a percentage."
-  (proced-format-cpu decode))
-
-(defun proced-amd-gpu-format-dma (dma)
-  "Format the integer DMA, which should be a percentage."
-  (proced-format-cpu dma))
+(defun proced-amd-gpu-format-kb (kilobytes)
+  "Format KILOBYTES in a human readable format."
+  ;; TODO use appropriate usage face
+  (let ((formatted (funcall byte-count-to-string-function (* 1024 kilobytes))))
+    (if (bound-and-true-p proced-enable-color-flag)
+        (propertize formatted 'font-lock-face 'proced-amd-gpu-memory-low-usage)
+      formatted)))
 
 (with-eval-after-load 'proced
   (add-to-list 'proced-custom-attributes 'proced-amd-gpu-pgpu)
