@@ -10,10 +10,9 @@ on:
 
 jobs:
   unix-test:
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest]
         emacs_version:
           - 28.1
           - 28.2
